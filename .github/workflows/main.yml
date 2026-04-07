@@ -58,6 +58,7 @@ jobs:
 
   build_and_push_to_docker_hub:
     name: Push backend Docker image to DockerHub
+    if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
     runs-on: ubuntu-latest
     needs: tests
     steps:
@@ -78,7 +79,7 @@ jobs:
           # Нет, это нехорошо
       - name: Push to DockerHub
         # Одновременный билд и пуш образа в Docker Hub
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           # Параметр context: ./backend/ указывает, что нужный Dockerfile
           # находится в ./backend/
@@ -115,6 +116,7 @@ jobs:
           npm run test
   build_frontend_and_push_to_docker_hub:
     name: Push frontend Docker image to DockerHub
+    if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
     runs-on: ubuntu-latest
     needs:
       - tests
@@ -130,7 +132,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Push to DockerHub
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./frontend/
           push: true
@@ -138,6 +140,7 @@ jobs:
 
   build_gateway_and_push_to_docker_hub:
     name: Push gateway Docker image to DockerHub
+    if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
     runs-on: ubuntu-latest
     needs:
       - tests
@@ -153,8 +156,22 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Push to DockerHub
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./gateway/
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/taski_gateway:latest
+  send_message:
+    runs-on: ubuntu-latest
+    if: ${{ always() && secrets.TELEGRAM_TO != '' && secrets.TELEGRAM_TOKEN != '' && needs.build_and_push_to_docker_hub.result == 'success' && needs.build_frontend_and_push_to_docker_hub.result == 'success' && needs.build_gateway_and_push_to_docker_hub.result == 'success' }}
+    needs:
+      - build_and_push_to_docker_hub
+      - build_frontend_and_push_to_docker_hub
+      - build_gateway_and_push_to_docker_hub
+    steps:
+      - name: Send message
+        uses: appleboy/telegram-action@v1.0.1
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: Образы успешно загружены!
